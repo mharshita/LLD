@@ -76,6 +76,8 @@ public class GameService {
             return false;
         }
 
+        player.moveTo(finalCell[0], finalCell[1]);
+
         if(board.checkWin(finalCell[0], finalCell[1])) {
             state = GameState.WON;
             winner = player;

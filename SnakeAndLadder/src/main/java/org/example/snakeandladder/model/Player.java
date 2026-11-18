@@ -2,8 +2,8 @@ package main.java.org.example.snakeandladder.model;
 
 public class Player {
     private final String name;
-    private final int row;
-    private final int col;
+    private int row;
+    private int col;
 
     public Player(String name) {
         this.name = name;
@@ -21,5 +21,10 @@ public class Player {
 
     public int getPlayerCol() {
         return col;
+    }
+
+    public void moveTo(int row, int col) {
+        this.row = row;
+        this.col = col;
     }
 }

@@ -95,10 +95,6 @@ public class Board {
     }
 
     public boolean checkWin(int row, int col) {
-        if(row <= 0 && col <= 0) {
-            return true;
-        }
-
-        return false;
+        return row == 0 && col == 9;
     }
 }
