@@ -30,36 +30,29 @@ public class Board {
     }
 
     public int[] getCellAfterMove(int move, int row, int col) {
-        int newRow = 0;
-        int newCol = 0;
+        int position;
 
-        boolean isEven = false;
-
-        if(row % 2 == 0) {
-            isEven = true;
+        if(row % 2 == 1) {
+            position = (9 - row) * 10 + col;
+        } else {
+            position = (9 - row) * 10 + (9 - col);
         }
 
-        if(!isEven) {
-            if(col + move > 9) {
-                int temp = 9 - col;
-                newCol = move - temp + 1;
-                newRow = row - 1;
-            }
-            else {
-                newRow = row;
-                newCol = col + move;
-            }
+        int newPosition = position + move;
+
+        if(newPosition > 99) {
+            return new int[]{row, col};
         }
-        else {
-            if(col - move >= 0) {
-                int temp = move - col;
-                newCol = move - temp + 1;
-                newRow = row - 1;
-            }
-            else {
-                newRow = row;
-                newCol = col + move;
-            }
+
+        int newRow = 9 - (newPosition / 10);
+        int offSet = newPosition % 10;
+
+        int newCol;
+
+        if(newRow % 2 == 1) {
+            newCol = offSet;
+        } else {
+            newCol = 9 - offSet;
         }
 
         GameService.Pair key = new GameService.Pair(newRow, newCol);
@@ -68,8 +61,7 @@ public class Board {
             GameService.Pair val = snakePos.get(key);
             newRow = val.first();
             newCol = val.second();
-        }
-        else if (ladderPos.containsKey(key)) {
+        } else if(ladderPos.containsKey(key)) {
             GameService.Pair val = ladderPos.get(key);
             newRow = val.first();
             newCol = val.second();
@@ -79,15 +71,11 @@ public class Board {
     }
 
     public boolean isValidMove(int move, int row, int col) {
-        if(!inBounds(row, col)) {
+        if (!inBounds(row, col)) {
             return false;
         }
 
-        if(move < 1 || move > 6) {
-            return false;
-        }
-
-        if(grid[row][col] != 0) {
+        if (move < 1 || move > 6) {
             return false;
         }
 

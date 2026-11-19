@@ -57,12 +57,10 @@ public class GameService {
 
     public boolean makeMove(Player player, int moves) {
         if (state != GameState.IN_PROGRESS) {
-            state = GameState.ABORTED;
             return false;
         }
 
         if(player != currentPlayer) {
-            state = GameState.ABORTED;
             return false;
         }
 
@@ -72,7 +70,6 @@ public class GameService {
         int[] finalCell = board.getCellAfterMove(moves, currentRow, currentCol);
 
         if(!board.isValidMove(moves, finalCell[0], finalCell[1])) {
-            state = GameState.ABORTED;
             return false;
         }
 
