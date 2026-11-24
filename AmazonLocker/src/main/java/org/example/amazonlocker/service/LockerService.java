@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class LockerService {
@@ -24,7 +25,7 @@ public class LockerService {
 
     public LockerService(Map<Integer, LockerCompartment> lockers) {
         this.lockers = lockers;
-        this.accessTokens = new HashMap<>();
+        this.accessTokens = new ConcurrentHashMap<>();
     }
 
     private LockerCompartment findAvailableLocker(Size packageSize) {
@@ -54,7 +55,7 @@ public class LockerService {
         return token;
     }
 
-    public synchronized String putPackageInLocker(UserPackage userPackage) {
+    public String putPackageInLocker(UserPackage userPackage) {
         LockerCompartment locker = findAvailableLocker(userPackage.getSize());
 
         if(locker == null) {
@@ -73,7 +74,7 @@ public class LockerService {
         return tokenCode;
     }
 
-    public synchronized RetrievalStatus retrievePackageFromLocker(String tokenCode) {
+    public RetrievalStatus retrievePackageFromLocker(String tokenCode) {
         AccessToken token = accessTokens.get(tokenCode);
 
         if(token == null) {

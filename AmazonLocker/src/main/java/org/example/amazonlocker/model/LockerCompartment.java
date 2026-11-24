@@ -21,11 +21,11 @@ public class LockerCompartment {
         return size;
     }
 
-    public boolean isAvailable() {
+    public synchronized boolean isAvailable() {
         return storedPackage == null;
     }
 
-    public void storePackage(UserPackage userPackage) {
+    public synchronized void storePackage(UserPackage userPackage) {
         if(!isAvailable()) {
             throw new IllegalStateException("Locker is already occupied");
         }
@@ -33,7 +33,7 @@ public class LockerCompartment {
         this.storedPackage = userPackage;
     }
 
-    public UserPackage removePackage() {
+    public synchronized UserPackage removePackage() {
         UserPackage removedPackage = storedPackage;
         storedPackage = null;
         return removedPackage;
