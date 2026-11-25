@@ -12,9 +12,9 @@ public class Main {
        Map<Integer, LockerCompartment> lockers = new HashMap<>();
 
         lockers.put(1, new LockerCompartment(1, Size.SMALL, null));
-//        lockers.put(2, new LockerCompartment(2, Size.SMALL, null));
-//        lockers.put(3, new LockerCompartment(3, Size.MEDIUM, null));
-//        lockers.put(4, new LockerCompartment(4, Size.LARGE, null));
+        lockers.put(2, new LockerCompartment(2, Size.SMALL, null));
+        lockers.put(3, new LockerCompartment(3, Size.MEDIUM, null));
+        lockers.put(4, new LockerCompartment(4, Size.LARGE, null));
 
         LockerService service = new LockerService(lockers);
 

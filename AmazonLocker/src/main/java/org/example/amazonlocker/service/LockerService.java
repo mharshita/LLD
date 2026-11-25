@@ -10,22 +10,42 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class LockerService {
     private static final int TOKEN_VALIDITY = 7;
 
     private final Map<Integer, LockerCompartment> lockers;
+    private final Map<Size, Queue<LockerCompartment>> availableLockers;
+
     private final Map<String, AccessToken> accessTokens;
+    private final Map<Integer, String> lockerToToken;
 
     private final SecureRandom random = new SecureRandom();
 
     public LockerService(Map<Integer, LockerCompartment> lockers) {
-        this.lockers = lockers;
+        this.lockers = new ConcurrentHashMap<>(lockers);
         this.accessTokens = new ConcurrentHashMap<>();
+
+        this.lockerToToken = new ConcurrentHashMap<>();
+        this.availableLockers = new EnumMap<>(Size.class);
+
+        for (Size size : Size.values()) {
+            availableLockers.put(size, new ConcurrentLinkedQueue<>());
+        }
+
+        for (LockerCompartment locker : this.lockers.values()) {
+
+            if (locker.isAvailable()) {
+                availableLockers.get(locker.getLockerSize()).offer(locker);
+            }
+        }
     }
 
     private LockerCompartment findAvailableLocker(Size packageSize) {
@@ -34,25 +54,30 @@ public class LockerService {
         for(int i=packageSize.ordinal(); i<sizes.length; i++) {
             Size requiredSize = sizes[i];
 
-            for(LockerCompartment locker: lockers.values()) {
-                if(locker.isAvailable() && locker.getLockerSize() == requiredSize) {
-                    return locker;
-                }
+            LockerCompartment locker = availableLockers.get(requiredSize).poll();
+
+            if(locker != null) {
+                return locker;
             }
         }
 
         return null;
     }
 
-    private String generateToken() {
-        String token;
-
-        do {
+    private AccessToken generateToken(int lockerId) {
+        while (true) {
             int number = random.nextInt(1_000_000);
-            token = String.format("%06d", number);
-        } while (accessTokens.containsKey(token));
+            String tokenCode = String.format("%06d", number);
 
-        return token;
+            LocalDateTime expiryTime = LocalDateTime.now().plusDays(TOKEN_VALIDITY);
+            AccessToken token = new AccessToken(tokenCode, lockerId, expiryTime);
+
+            AccessToken existingToken = accessTokens.putIfAbsent(tokenCode, token);
+
+            if(existingToken == null) {
+                return token;
+            }
+        }
     }
 
     public String putPackageInLocker(UserPackage userPackage) {
@@ -62,19 +87,45 @@ public class LockerService {
             return null;
         }
 
-        String tokenCode = generateToken();
+        AccessToken token = null;
+        boolean packageStored = false;
 
-        LocalDateTime expiryTime = LocalDateTime.now().plusDays(TOKEN_VALIDITY);
+        try {
+            token = generateToken(locker.getLockerId());
 
-        AccessToken token = new AccessToken(tokenCode, locker.getLockerId(), expiryTime);
+            locker.storePackage(userPackage);
+            packageStored = true;
 
-        locker.storePackage(userPackage);
+            lockerToToken.put(locker.getLockerId(), token.getCode());
 
-        accessTokens.put(tokenCode, token);
-        return tokenCode;
+            return token.getCode();
+        } catch (RuntimeException exception) {
+            if(token != null) {
+                accessTokens.remove(token.getCode(), token);
+            }
+
+            lockerToToken.remove(
+                    locker.getLockerId(),
+                    token == null ? null : token.getCode()
+            );
+
+            if (packageStored) {
+                locker.removePackage();
+            }
+
+            if(locker.isAvailable()) {
+                availableLockers.get(locker.getLockerSize()).offer(locker);
+            }
+
+            throw exception;
+        }
     }
 
     public RetrievalStatus retrievePackageFromLocker(String tokenCode) {
+        if (tokenCode == null) {
+            return RetrievalStatus.INVALID_TOKEN;
+        }
+
         AccessToken token = accessTokens.get(tokenCode);
 
         if(token == null) {
@@ -85,42 +136,61 @@ public class LockerService {
             return RetrievalStatus.EXPIRED_TOKEN;
         }
 
+        if (!accessTokens.remove(tokenCode, token)) {
+            return RetrievalStatus.INVALID_TOKEN;
+        }
+
         LockerCompartment locker = lockers.get(token.getLockerId());
 
         if(locker == null || locker.isAvailable()) {
+            lockerToToken.remove(token.getLockerId(), tokenCode);
             return RetrievalStatus.LOCKER_NOT_FOUND;
         }
 
-        locker.removePackage();
+        UserPackage removedPackage = locker.removePackage();
+        lockerToToken.remove(token.getLockerId(), tokenCode);
 
-        accessTokens.remove(tokenCode);
+        if (removedPackage == null) {
+            return RetrievalStatus.LOCKER_NOT_FOUND;
+        }
+
+        availableLockers.get(locker.getLockerSize()).offer(locker);
 
         return RetrievalStatus.SUCCESS;
     }
 
-    public synchronized UserPackage removePackageByStaff(int lockerId) {
+    public UserPackage removePackageByStaff(int lockerId) {
         LockerCompartment locker = lockers.get(lockerId);
 
         if(locker == null || locker.isAvailable()) {
             return null;
         }
 
-        AccessToken associatedToken = null;
+        String tokenCode = lockerToToken.get(lockerId);
 
-        for(AccessToken accessToken: accessTokens.values()) {
-            if(accessToken.getLockerId() == lockerId) {
-                associatedToken = accessToken;
-                break;
-            }
-        }
-
-        if(associatedToken == null || !associatedToken.isExpired()) {
+        if (tokenCode == null) {
             return null;
         }
 
+        AccessToken associatedToken = accessTokens.get(tokenCode);
+
+        if (associatedToken == null || !associatedToken.isExpired()) {
+            return null;
+        }
+
+        if (!accessTokens.remove(tokenCode, associatedToken)) {
+            return null;
+        }
+
+        lockerToToken.remove(lockerId, tokenCode);
+
         UserPackage removedPackage = locker.removePackage();
 
-        accessTokens.remove(associatedToken.getCode());
+        if (removedPackage == null) {
+            return null;
+        }
+
+        availableLockers.get(locker.getLockerSize()).offer(locker);
 
         return removedPackage;
     }

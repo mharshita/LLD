@@ -26,7 +26,7 @@ public class LockerCompartment {
     }
 
     public synchronized void storePackage(UserPackage userPackage) {
-        if(!isAvailable()) {
+        if(storedPackage != null) {
             throw new IllegalStateException("Locker is already occupied");
         }
 
@@ -39,7 +39,7 @@ public class LockerCompartment {
         return removedPackage;
     }
 
-    public UserPackage getStoredPackage() {
+    public synchronized UserPackage getStoredPackage() {
         return storedPackage;
     }
 }
